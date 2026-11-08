@@ -42,7 +42,6 @@ tech-challenge-fase4/
 ├── saida/                        # gerada ao rodar: alertas.json, relatório, vídeo anotado
 ├── testes/                       # testes automáticos (pytest), inclusive das regras de vídeo
 ├── docs/manual.html              # manual com diagrama interativo do fluxo
-├── docs/roteiro_video.md         # sugestão de roteiro para o vídeo de entrega
 └── RELATORIO_TECNICO.md          # relatório técnico exigido na entrega
 ```
 
