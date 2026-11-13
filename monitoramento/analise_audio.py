@@ -167,7 +167,8 @@ def transcrever_com_azure(caminho_wav):
     if erros:
         raise RuntimeError(f"Erro no Azure Speech: {erros[0]}")
     return falas
-def transcrever_com_diarizacao_api(caminho_wav, max_falantes=2):
+  
+def transcrever_com_diarizacao_api(caminho_wav, qde_Falantes=2):
     import json
     import requests
     endpoint = config.AZURE_SPEECH_ENDPOINT.strip().rstrip("/")
@@ -178,7 +179,7 @@ def transcrever_com_diarizacao_api(caminho_wav, max_falantes=2):
     url = f"{endpoint}/speechtotext/transcriptions:transcribe?api-version=2025-10-15"
     definicao = {
         "locales": [config.IDIOMA],
-        "diarization": {"enabled": True, "maxSpeakers": max_falantes},
+        "diarization": {"enabled": True, "maxSpeakers": qde_Falantes},
     }
     with Path(caminho_wav).open("rb") as arquivo_audio:
         resposta = requests.post(
@@ -209,10 +210,11 @@ def transcrever_com_diarizacao_api(caminho_wav, max_falantes=2):
             "duracao_segundos": float(frase.get("durationMilliseconds", 0)) / 1000,
         })
     return falas
-def obter_transcricao(caminho_audio, caminho_wav):
-    if config.azure_speech_api_configurado():
+def obter_transcricao(caminho_audio, caminho_wav, qde_Falantes=2):
+    if config.azure_speech_api_configurado() and qde_Falantes > 1:
         print("  Transcrevendo com diarização pela Fast Transcription API...")
-        return transcrever_com_diarizacao_api(caminho_wav), "Azure Fast Transcription API"
+        return transcrever_com_diarizacao_api(caminho_wav, qde_Falantes), "Azure Fast Transcription API"
+
     if config.azure_speech_configurado():
         print("  Transcrevendo e separando falantes com Azure Speech to Text...")
         return transcrever_com_azure(caminho_wav), "Azure Speech SDK"
@@ -299,7 +301,8 @@ def encontrar_termos_criticos(texto):
 # ---------------------------------------------------------------------------
 # Função principal
 # ---------------------------------------------------------------------------
-def analisar_audio(caminho_audio, paciente_id, falante_paciente=None):
+def analisar_audio(caminho_audio, paciente_id, qde_Falantes=2, falante_paciente=None):
+    id_falante_paciente = None
     caminho_audio = Path(caminho_audio)
     print(f"Analisando áudio: {caminho_audio.name}")
     # Carrega e converte para WAV 16 kHz mono (formato aceito pelo Azure)
@@ -308,14 +311,17 @@ def analisar_audio(caminho_audio, paciente_id, falante_paciente=None):
     caminho_wav = config.PASTA_SAIDA / f"{caminho_audio.stem}_16khz.wav"
     soundfile.write(caminho_wav, sinal, taxa, subtype="PCM_16")
     caracteristicas = extrair_caracteristicas_voz(sinal, taxa)
-    transcricao, fonte_transcricao = obter_transcricao(caminho_audio, caminho_wav)
+    transcricao, fonte_transcricao = obter_transcricao(caminho_audio, caminho_wav, qde_Falantes)
     falas = transcricao if isinstance(transcricao, list) else []
-    transcricao = (" ".join(fala["texto"] for fala in falas)
-                   if falas else transcricao)
+    transcricao = (" ".join(fala["texto"] for fala in falas) if falas else transcricao)
+
+    # A quantidade de falantes nao identifica quem e o paciente.
     id_falante_paciente = selecionar_falante_paciente(falas, falante_paciente)
     texto_paciente = texto_do_falante(falas, id_falante_paciente)
-    caracteristicas_falante = (extrair_caracteristicas_voz_falante(
-        sinal, taxa, falas, id_falante_paciente) if id_falante_paciente else None)
+    caracteristicas_falante = (
+        extrair_caracteristicas_voz_falante(sinal, taxa, falas, id_falante_paciente)
+        if id_falante_paciente else None
+    )
     metricas_vocais_atribuiveis = bool(texto_paciente) and caracteristicas_falante is not None
     if metricas_vocais_atribuiveis:
         caracteristicas = caracteristicas_falante
@@ -401,5 +407,6 @@ def selecionar_falante_paciente(falas, escolha=None):
 def texto_do_falante(falas, speaker_id):
     if not speaker_id:
         return ""
+                         
     return " ".join(fala["texto"] for fala in falas
                     if fala["speaker_id"] == speaker_id)
